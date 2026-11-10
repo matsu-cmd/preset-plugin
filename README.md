@@ -29,7 +29,7 @@ preset-plugin/
 ├── sql/
 │   └── schema.sql          # схема БД
 ├── scripts/
-│   └── seed.py             # python-сиды (опционально)
+│   └── demo.sql            # демонстрационные запросы
 └── src/
     ├── main.cpp            # CLI
     ├── preset.hpp          # модель
@@ -52,29 +52,37 @@ sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
 # Создание пользователя и БД
-sudo -u postgres psql -c "CREATE USER matsu WITH PASSWORD 'DubSaw';"
+sudo -u postgres psql -c "CREATE USER matsu WITH PASSWORD '<ваш-пароль>';"
 sudo -u postgres psql -c "CREATE DATABASE plugin_db OWNER matsu;"
 
 # Применение схемы
-psql "postgresql://matsu:DubSaw@localhost/plugin_db" -f sql/schema.sql
+psql "postgresql://matsu:<ваш-пароль>@localhost/plugin_db" -f sql/schema.sql
 ```
+
+> Если `CREATE EXTENSION` падает с «permission denied», примените `schema.sql` от суперпользователя:
+> `sudo -u postgres psql -d plugin_db -f sql/schema.sql`
 
 ## Сборка
 
 ```bash
 mkdir -p build && cd build
 cmake ..
-make -j$(nproc)
+make -j8     # замените 8 на число ядер CPU: nproc
 ```
 
 ## Запуск
 
 ```bash
-export PRESET_DB_URL="postgresql://matsu:DubSaw@localhost/plugin_db"
+# fish
+set -x PRESET_DB_URL "postgresql://matsu:<ваш-пароль>@localhost/plugin_db"
+
+# bash / zsh
+export PRESET_DB_URL="postgresql://matsu:<ваш-пароль>@localhost/plugin_db"
 
 ./preset_cli seed                                 # создать тестовые данные
 ./preset_cli list MySynth                         # список пресетов
 ./preset_cli show <uuid>                          # показать пресет
+./preset_cli save MySynth "My Bass"               # создать пресет
 ./preset_cli list MySynth --tag warm --query Pad  # поиск
 ./preset_cli delete <uuid>                        # удалить
 ```
@@ -85,6 +93,14 @@ export PRESET_DB_URL="postgresql://matsu:DubSaw@localhost/plugin_db"
 psql $PRESET_DB_URL -c "UPDATE presets SET params = jsonb_set(params, '{gain}', '0.99') WHERE name = 'Warm Pad';"
 psql $PRESET_DB_URL -c "SELECT * FROM preset_history ORDER BY changed_at DESC LIMIT 3;"
 ```
+
+## Полная демонстрация схемы
+
+```bash
+psql $PRESET_DB_URL -f scripts/demo.sql
+```
+
+Скрипт `demo.sql` показывает: структуру таблиц, индексы, триггеры, содержимое, M:N-связь, EXPLAIN-план запросов.
 
 ## Схема БД
 
@@ -106,3 +122,13 @@ psql $PRESET_DB_URL -c "SELECT * FROM preset_history ORDER BY changed_at DESC LI
 Триггеры:
 - `presets_touch` — автообновление `updated_at`
 - `presets_audit` — запись в `preset_history` при изменении `params`
+
+## ERD
+![ERD](docs/erd.png)
+
+Кардинальности:
+- `presets` N:1 `plugins` (CASCADE)
+- `presets` N:1 `users` (SET NULL)
+- `presets` N:1 `categories` (SET NULL)
+- `presets` M:N `tags` через `preset_tags` (CASCADE)
+- `presets` 1:N `preset_history` (CASCADE)
