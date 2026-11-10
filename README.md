@@ -37,6 +37,30 @@ preset-plugin/
     └── preset_repo.cpp     # libpqxx-реализация
 ```
 
+## ERD
+
+![ERD](docs/marganov_024_ERD.jpg)
+
+
+Связи:
+
+```
+users ◄── author_id ─── presets ─── plugin_id ──► plugins
+                           │
+                           ├── category_id ──► categories
+                           │
+                           └── id ──► preset_tags ◄── tag_id ── tags
+                           │
+                           └── id ──► preset_history
+```
+
+Кардинальности:
+- `presets` N:1 `plugins` (CASCADE)
+- `presets` N:1 `users` (SET NULL)
+- `presets` N:1 `categories` (SET NULL)
+- `presets` M:N `tags` через `preset_tags` (CASCADE)
+- `presets` 1:N `preset_history` (CASCADE)
+
 ## Установка зависимостей (Arch Linux)
 
 ```bash
@@ -52,12 +76,15 @@ sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
 # Создание пользователя и БД
-sudo -u postgres psql -c "CREATE USER matsu WITH PASSWORD '<ваш-пароль>';"
-sudo -u postgres psql -c "CREATE DATABASE plugin_db OWNER matsu;"
+sudo -u postgres psql -c "CREATE USER preset_user WITH PASSWORD 'change_me';"
+sudo -u postgres psql -c "CREATE DATABASE plugin_db OWNER preset_user;"
 
 # Применение схемы
-psql "postgresql://matsu:<ваш-пароль>@localhost/plugin_db" -f sql/schema.sql
+psql "postgresql://preset_user:change_me@localhost/plugin_db" -f sql/schema.sql
 ```
+
+> Замените `preset_user` и `change_me` на свои значения.
+> Для локальной разработки пароль может быть простым; **Не коммитьте реальные пароли в git.**
 
 > Если `CREATE EXTENSION` падает с «permission denied», примените `schema.sql` от суперпользователя:
 > `sudo -u postgres psql -d plugin_db -f sql/schema.sql`
@@ -100,7 +127,15 @@ psql $PRESET_DB_URL -c "SELECT * FROM preset_history ORDER BY changed_at DESC LI
 psql $PRESET_DB_URL -f scripts/demo.sql
 ```
 
-Скрипт `demo.sql` показывает: структуру таблиц, индексы, триггеры, содержимое, M:N-связь, EXPLAIN-план запросов.
+Скрипт `demo.sql` показывает:
+- структуру таблиц (`\dt`, `\d presets`);
+- содержимое справочников;
+- M:N-связь `presets` ↔ `tags`;
+- все индексы и триггеры;
+- работу аудита (`UPDATE` → запись в `preset_history`);
+- аналитическое представление `v_preset_stats`;
+- поиск по JSONB;
+- `EXPLAIN ANALYZE` для запросов с GIN-индексами.
 
 ## Схема БД
 
@@ -122,13 +157,3 @@ psql $PRESET_DB_URL -f scripts/demo.sql
 Триггеры:
 - `presets_touch` — автообновление `updated_at`
 - `presets_audit` — запись в `preset_history` при изменении `params`
-
-## ERD
-![ERD](docs/marganov_024_ERD.jpg)
-
-Кардинальности:
-- `presets` N:1 `plugins` (CASCADE)
-- `presets` N:1 `users` (SET NULL)
-- `presets` N:1 `categories` (SET NULL)
-- `presets` M:N `tags` через `preset_tags` (CASCADE)
-- `presets` 1:N `preset_history` (CASCADE)
