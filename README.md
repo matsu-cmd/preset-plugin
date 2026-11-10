@@ -124,7 +124,7 @@ psql $PRESET_DB_URL -f scripts/demo.sql
 - `presets_audit` — запись в `preset_history` при изменении `params`
 
 ## ERD
-![ERD](docs/erd.png)
+![ERD](docs/marganov_024_ERD.jpg)
 
 Кардинальности:
 - `presets` N:1 `plugins` (CASCADE)
